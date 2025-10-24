@@ -111,3 +111,44 @@ class Vocab:
                 toks.append(self.itos[i])
 
         return " ".join(toks)
+
+
+def make_collate(pad_id: int):
+    """Return a collate function that pads token sequences with pad_id.
+
+    Usage:
+        collate = make_collate(vocab.stoi[vocab.pad])
+        DataLoader(..., collate_fn=collate)
+    """
+    def collate(batch):
+        if not batch:
+            raise ValueError("Пустой батч")
+
+        imgs, seqs = zip(*batch)
+
+        # картинки
+        imgs = torch.stack(imgs, dim=0)
+
+        # токены паддим до максимальной длины в батче
+        if not seqs:
+            raise ValueError("Нет последовательностей в батче")
+
+        max_len = max(len(seq) for seq in seqs)
+        if max_len == 0:
+            raise ValueError("Все последовательности пустые")
+
+        padded_seqs = torch.full((len(seqs), max_len), fill_value=pad_id, dtype=torch.long)
+
+        for i, seq in enumerate(seqs):
+            if len(seq) > 0:
+                padded_seqs[i, :len(seq)] = seq
+
+        return imgs, padded_seqs
+
+    return collate
+
+
+# Backwards-compatible alias: if users import `collate_fn`, provide a default that uses pad_id=0.
+# It's recommended to call make_collate with the real pad id from your Vocab.
+def collate_fn(batch):
+    return make_collate(0)(batch)

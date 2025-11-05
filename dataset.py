@@ -1,154 +1,174 @@
-from torch.utils.data import Dataset
-import pandas as pd
-import cv2
-import ast
-import os
-import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
+from pathlib import Path
+from datasets import load_dataset
+from torchvision import transforms
+from typing import Optional
+import torchvision.transforms.functional as F
+from build_vocabulary import LaTeXTokenizer
 
-# Подгоняем изображения под общий размер, сохраняя отношение сторон. Паддим справа.
-def resize_and_pad(img, target_height=64, target_width=256):
-    # Проверяем, что изображение загружено корректно
-    if img is None:
-        raise ValueError("Не удалось загрузить изображение")
+class ResizeWithPad:
+    def __init__(self, target_size=224, fill=255):
+        self.target_size = target_size
+        self.fill = fill
     
-    h, w = img.shape
-    if h == 0 or w == 0:
-        raise ValueError("Изображение имеет нулевые размеры")
-    
-    scale = target_height / h
-    new_w = int(w * scale)
+    def __call__(self, image):
+        w, h = image.size
+        
+        ratio = self.target_size / max(w, h)
+        new_w = int(w * ratio)
+        new_h = int(h * ratio)
+        
+        image = F.resize(image, (new_h, new_w), antialias=True)
+        
+        delta_w = self.target_size - new_w
+        delta_h = self.target_size - new_h
+        
+        padding = (
+            delta_w // 2,
+            delta_h // 2,
+            delta_w - (delta_w // 2),
+            delta_h - (delta_h // 2)
+        )
+        
+        image = F.pad(image, padding, fill=self.fill, padding_mode='constant')
+        
+        return image
 
-    if new_w > target_width:
-        new_w = target_width
-
-    resized = cv2.resize(img, (new_w, target_height))
-
-    padded = np.zeros((target_height, target_width), dtype=np.float32)
-    padded[:, :new_w] = resized
-
-    return padded
-
-
-# ===== Dataset =====
-class FormulaDataset(Dataset):
-    def __init__(self, path, vocab, transform=None):
-        self.data = pd.read_csv(os.path.join(path, 'annotations.csv'))
-        self.img_dir = os.path.join(path, 'images')
+class LaTeXDataset(Dataset):
+    def __init__(
+        self,
+        images_dir: str,
+        vocab,
+        cache_dir: str = r'D:\datasets',
+        split: str = 'train',
+        transform: Optional[transforms.Compose] = None,
+        max_latex_len: int = 512
+    ):
+        self.images_dir = Path(images_dir)
         self.vocab = vocab
-        self.transform = transform
+        self.tokenizer = LaTeXTokenizer()
+        self.transform = transform or self._default_transform()
+        
+        print(f"Loading dataset from HuggingFace...")
+        ds = load_dataset(
+            "hoang-quoc-trung/fusion-image-to-latex-datasets",
+            cache_dir=cache_dir,
+            split=split
+        )
+        
+        print(f"Filtering by LaTeX length <= {max_latex_len}...")
+        ds = ds.filter(lambda x: len(x['latex']) <= max_latex_len)
+        
+        self.filenames = ds['image_filename']
+        self.latex_formulas = ds['latex']
+        
+        print(f"Dataset ready: {len(self.filenames)} samples")
+
+    def _default_transform(self):
+        return transforms.Compose([
+            ResizeWithPad(target_size=224, fill=255),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
 
     def __len__(self):
-        return len(self.data)
-
+        return len(self.filenames)
+    
     def __getitem__(self, idx):
-        row = self.data.iloc[idx]
-
-        # --- картинка ---
-        img_path = os.path.join(self.img_dir, row['filenames'])
-        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+        image_filename = self.filenames[idx]
+        latex = self.latex_formulas[idx]
+        img_path = self.images_dir / image_filename
         
-        # Проверяем, что изображение загружено
-        if img is None:
-            raise ValueError(f"Не удалось загрузить изображение: {img_path}")
-        
-        img = resize_and_pad(img)
-        img = img / 255.0 # нормируем
-        img = torch.tensor(img).unsqueeze(0).float()  # (1,H,W)
-
-        # --- токены ---
         try:
-            info = ast.literal_eval(row['image_data'])
-            tokens = info['full_latex_chars']   # список строк-токенов
-            token_ids = self.vocab.encode(tokens)
-        except (ValueError, SyntaxError, KeyError) as e:
-            raise ValueError(f"Ошибка при обработке токенов для строки {idx}: {e}")
-
-        return img, torch.tensor(token_ids)
-
-# ===== Vocabulary =====
-class Vocab:
-    def __init__(self, token_list):
-
-        # спец символы
-        self.pad = "<pad>"
-        self.bos = "<bos>"
-        self.eos = "<eos>"
-        self.unk = "<unk>"
-
-        self.tokens = [self.pad, self.bos, self.eos, self.unk] + sorted(token_list)
-        self.stoi = {t: i for i, t in enumerate(self.tokens)}
-        self.itos = {i: t for t, i in self.stoi.items()}
-
-        self.length = len(self.tokens)  # ATTENTION!!!
-
-    def __len__(self):
-        return self.length
-
-    def encode(self, token_seq):
-        if not isinstance(token_seq, list):
-            raise ValueError(f"Expected list of tokens, got {type(token_seq)}")
+            image = Image.open(img_path).convert('RGB')
+            image = self.transform(image)
+        except Exception as e:
+            image = torch.zeros((3, 224, 224))
         
-        if not all(isinstance(t, str) for t in token_seq):
-            raise ValueError("All tokens must be strings")
+        tokens = self.tokenizer.tokenize(latex)
+        encoded_tokens = self.vocab.encode(tokens)
+        token_tensor = torch.LongTensor(encoded_tokens)
         
-        return [self.stoi[self.bos]] + \
-               [self.stoi.get(t, self.stoi[self.unk]) for t in token_seq] + \
-               [self.stoi[self.eos]]
+        return image, token_tensor
 
-    def decode(self, ids):
-        # Декодируем и обрезаем по первому <eos>.
-        eos_id = self.stoi[self.eos]
-        pad_id = self.stoi[self.pad]
-        bos_id = self.stoi[self.bos]
-
-        toks = []
-        for i in ids:
-            if i == eos_id:
-                break
-            # Пропускаем pad и bos токены
-            if i not in (pad_id, bos_id):
-                toks.append(self.itos[i])
-
-        return " ".join(toks)
-
-
-def make_collate(pad_id: int):
-    """Return a collate function that pads token sequences with pad_id.
-
-    Usage:
-        collate = make_collate(vocab.stoi[vocab.pad])
-        DataLoader(..., collate_fn=collate)
-    """
-    def collate(batch):
-        if not batch:
-            raise ValueError("Пустой батч")
-
-        imgs, seqs = zip(*batch)
-
-        # картинки
-        imgs = torch.stack(imgs, dim=0)
-
-        # токены паддим до максимальной длины в батче
-        if not seqs:
-            raise ValueError("Нет последовательностей в батче")
-
-        max_len = max(len(seq) for seq in seqs)
-        if max_len == 0:
-            raise ValueError("Все последовательности пустые")
-
-        padded_seqs = torch.full((len(seqs), max_len), fill_value=pad_id, dtype=torch.long)
-
-        for i, seq in enumerate(seqs):
-            if len(seq) > 0:
-                padded_seqs[i, :len(seq)] = seq
-
-        return imgs, padded_seqs
-
-    return collate
-
-
-# Backwards-compatible alias: if users import `collate_fn`, provide a default that uses pad_id=0.
-# It's recommended to call make_collate with the real pad id from your Vocab.
 def collate_fn(batch):
-    return make_collate(0)(batch)
+    images, token_tensors = zip(*batch)
+    
+    images = torch.stack(images, dim=0)
+    
+    max_len = max(len(t) for t in token_tensors)
+    pad_id = 0
+    
+    padded_tokens = []
+    for tokens in token_tensors:
+        padding = torch.full((max_len - len(tokens),), pad_id, dtype=torch.long)
+        padded = torch.cat([tokens, padding])
+        padded_tokens.append(padded)
+    
+    token_batch = torch.stack(padded_tokens, dim=0)
+    
+    return images, token_batch
+
+def get_dataloaders(
+    images_dir: str = r"D:\datasets\extraction\root\images",
+    vocab=None,
+    cache_dir: str = r'D:\datasets',
+    batch_size: int = 32,
+    num_workers: int = 0,
+    max_latex_len: int = 512
+):
+
+    train_dataset = LaTeXDataset(
+        images_dir=images_dir,
+        vocab=vocab,
+        cache_dir=cache_dir,
+        split='train[:5%]',
+        max_latex_len=max_latex_len
+    )
+    
+    val_dataset = LaTeXDataset(
+        images_dir=images_dir,
+        vocab=vocab,
+        cache_dir=cache_dir,
+        split='validation',
+        max_latex_len=max_latex_len
+    )
+    
+    test_dataset = LaTeXDataset(
+        images_dir=images_dir,
+        vocab=vocab,
+        cache_dir=cache_dir,
+        split='test',
+        max_latex_len=max_latex_len
+    )
+    
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        pin_memory=True
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        pin_memory=True
+    )
+    
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=collate_fn,
+        pin_memory=True
+    )
+    
+    return train_loader, val_loader, test_loader

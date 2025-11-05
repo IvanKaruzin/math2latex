@@ -1,2 +1,2 @@
-models/
-test_images/
+*.pth
+math2latex.ipynb

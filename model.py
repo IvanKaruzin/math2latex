@@ -1,33 +1,38 @@
-import torch.nn as nn
 import torch
+import torch.nn as nn
+import torchvision.models as models
 
-# --- CNN encoder ---
-class CNNEncoder(nn.Module):
-    def __init__(self, hidden_dim=256):
+class ResNetEncoder(nn.Module):
+    def __init__(self, hidden_dim=256, freeze_layers=True):
         super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(1, 64, 3, stride=1, padding=1),
-            nn.BatchNorm2d(64), nn.ReLU(),
-            nn.MaxPool2d(2,2),
-
-            nn.Conv2d(64, 128, 3, stride=1, padding=1),
-            nn.BatchNorm2d(128), nn.ReLU(),
-            nn.MaxPool2d(2,2),
-
-            nn.Conv2d(128, hidden_dim, 3, stride=1, padding=1),
-            nn.BatchNorm2d(hidden_dim), nn.ReLU(),
-        )
-
+        
+        resnet = models.resnet50(pretrained=True)
+        
+        if freeze_layers:
+            for param in resnet.layer1.parameters():
+                param.requires_grad = False
+            for param in resnet.layer2.parameters():
+                param.requires_grad = False
+            for param in resnet.layer3.parameters():
+                param.requires_grad = False
+            for param in resnet.layer4.parameters():
+                param.requires_grad = True
+        
+        self.features = nn.Sequential(*list(resnet.children())[:-2])
+        self.adaptive_pool = nn.AdaptiveAvgPool2d((7, 7))
+        self.projection = nn.Linear(2048, hidden_dim)
+    
     def forward(self, x):
-        feats = self.conv(x)  # [B,Hid,h,w]
-        B, C, H, W = feats.shape
-        # Преобразуем в последовательность: [B, H*W, C]
-        feats = feats.permute(0, 2, 3, 1).reshape(B, H*W, C)
-        return feats  # [B, seq_len, hidden_dim]
+        x = self.features(x)
+        x = self.adaptive_pool(x)
+        B, C, H, W = x.shape
+        x = x.permute(0, 2, 3, 1).reshape(B, H*W, C)
+        x = self.projection(x)
+        return x
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, vocab_size, hidden_dim=256, num_layers=4, nhead=8, dropout=0.1, max_len=512):
+    def __init__(self, vocab_size, hidden_dim=256, num_layers=4, nhead=8, dropout=0.2, max_len=512):
         super().__init__()
         self.token_emb = nn.Embedding(vocab_size, hidden_dim)
         self.pos_emb = nn.Embedding(max_len, hidden_dim)
@@ -58,13 +63,12 @@ class TransformerDecoder(nn.Module):
 
         out = self.transformer_decoder(tgt_emb, memory, tgt_mask=tgt_mask)  # [B,T,H]
         return self.fc_out(out)
-    
 
 # Итоговая модель 
 class FormulaRecognizer(nn.Module):
     def __init__(self, vocab_size, hidden_dim=256, max_len=512):
         super().__init__()
-        self.encoder = CNNEncoder(hidden_dim)
+        self.encoder = ResNetEncoder(hidden_dim, freeze_layers=True)
         self.decoder = TransformerDecoder(vocab_size, hidden_dim, max_len=max_len)
         self.max_len = max_len
         self.vocab_size = vocab_size
@@ -79,7 +83,6 @@ class FormulaRecognizer(nn.Module):
         with torch.no_grad():
             memory = self.encoder(image.unsqueeze(0).to(device))  # [1,S,H]
 
-            # Используем правильные токены из словаря
             start_token = vocab.stoi[vocab.bos]
             end_token = vocab.stoi[vocab.eos]
             

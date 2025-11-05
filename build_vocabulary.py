@@ -81,25 +81,7 @@ def load_vocabulary(vocab_file: str = 'tokens.json'):
     print(f"Loaded vocabulary with {len(vocab)} tokens")
     return vocab
 
-def test_tokenizer():
-    tokenizer = LaTeXTokenizer()
-    
-    test_cases = [
-        r'\frac{1}{2}',
-        r'\lim_{n\to\infty}',
-        r'x^2+y^2=z^2',
-        r'\int_{0}^{1} x dx',
-        r'\sqrt{a+b}'
-    ]
-    
-    print("Testing tokenizer:")
-    for latex in test_cases:
-        tokens = tokenizer.tokenize(latex)
-        print(f"{latex:30} -> {tokens}")
-
 if __name__ == "__main__":
-    test_tokenizer()
-    
     vocab, stats = build_vocabulary_from_dataset(
         cache_dir=r'D:\datasets',
         split='train',
@@ -107,7 +89,3 @@ if __name__ == "__main__":
         output_file='tokens.json',
         max_latex_len=512
     )
-    
-    print("\nMost common tokens:")
-    for token, freq in stats['most_common_tokens']:
-        print(f"  {token:20} : {freq}")

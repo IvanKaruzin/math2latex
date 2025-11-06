@@ -5,6 +5,17 @@ from vocab import Vocab
 from dataset import LaTeXDataset
 from model import FormulaRecognizer
 
+import torch
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+from PIL import Image
+from pathlib import Path
+from vocab import Vocab
+from dataset import LaTeXDataset, ResizeWithPad
+from model import FormulaRecognizer
+from torchvision import transforms
+
 def denormalize_image(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     tensor = tensor.clone()
     for t, m, s in zip(tensor, mean, std):
@@ -70,6 +81,34 @@ def test_inference():
     plt.tight_layout()
     plt.show()
 
+def recognize_formula(image_path, checkpoint_path='checkpoints/checkpoint_best.pth', vocab_path='tokens.json'):
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
+        vocab = Vocab(vocab_path=vocab_path)
+    
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+        vocab_size = checkpoint.get('vocab_size', len(vocab))
+    
+        model = FormulaRecognizer(vocab_size=vocab_size, hidden_dim=256)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model = model.to(device)
+        model.eval()
+    
+        transform = transforms.Compose([
+            ResizeWithPad(target_size=224, fill=255),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        
+        image = Image.open(image_path).convert('RGB')
+        image_tensor = transform(image)
+        
+        with torch.no_grad():
+            predicted_ids = model.beam_search(image_tensor, vocab, device=device)
+            predicted_latex = vocab.decode(predicted_ids)
+        
+        return predicted_latex
+
 
 if __name__ == "__main__":
-    test_inference()
+    print(recognize_formula('test_images/x.png'))

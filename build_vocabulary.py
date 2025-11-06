@@ -6,14 +6,57 @@ from tqdm import tqdm
 
 class LaTeXTokenizer:
     def __init__(self):
+        self.common_tokens = [
+            ' ',
+            '\\begin{equation}', '\\end{equation}',
+            '\\begin{align}', '\\end{align}',
+            '\\begin{aligned}', '\\end{aligned}',
+            '\\begin{array}', '\\end{array}',
+            '\\begin{split}', '\\end{split}',
+            '\\begin{gather}', '\\end{gather}',
+            '\\begin{gathered}', '\\end{gathered}',
+            '\\begin{cases}', '\\end{cases}',
+            '\\begin{matrix}', '\\end{matrix}',
+            '\\begin{pmatrix}', '\\end{pmatrix}',
+            '\\begin{bmatrix}', '\\end{bmatrix}',
+            '\\begin{vmatrix}', '\\end{vmatrix}',
+            '\\frac', '\\sqrt', '\\sum', '\\prod', '\\int', '\\lim',
+            '\\sin', '\\cos', '\\tan', '\\log', '\\ln', '\\exp',
+            '\\arcsin', '\\arccos', '\\arctan',
+            '\\sinh', '\\cosh', '\\tanh',
+            '\\min', '\\max', '\\sup', '\\inf',
+            '\\det', '\\dim', '\\ker', '\\deg',
+            '\\alpha', '\\beta', '\\gamma', '\\delta', '\\epsilon', '\\zeta',
+            '\\eta', '\\theta', '\\iota', '\\kappa', '\\lambda', '\\mu',
+            '\\nu', '\\xi', '\\pi', '\\rho', '\\sigma', '\\tau',
+            '\\upsilon', '\\phi', '\\chi', '\\psi', '\\omega',
+            '\\Gamma', '\\Delta', '\\Theta', '\\Lambda', '\\Xi',
+            '\\Pi', '\\Sigma', '\\Phi', '\\Psi', '\\Omega',
+            '\\cdot', '\\times', '\\div', '\\pm', '\\mp',
+            '\\leq', '\\geq', '\\neq', '\\approx', '\\equiv',
+            '\\sim', '\\propto', '\\infty', '\\partial', '\\nabla',
+            '\\exists', '\\forall', '\\in', '\\notin',
+            '\\subset', '\\subseteq', '\\cap', '\\cup', '\\emptyset',
+            '\\dots', '\\ldots', '\\cdots', '\\vdots', '\\ddots',
+            '\\left', '\\right',
+            '\\bigl', '\\bigr', '\\Bigl', '\\Bigr',
+            '\\biggl', '\\biggr', '\\Biggl', '\\Biggr',
+            '\\\\', '&', '\\quad', '\\qquad',
+            '\\,', '\\:', '\\;', '\\!',
+            '\\text', '\\mathrm', '\\mathbf', '\\mathit'
+        ]
+        
+        common_pattern = '|'.join(re.escape(token) for token in sorted(self.common_tokens, key=len, reverse=True))
+        
         self.pattern = re.compile(
+            rf'{common_pattern}|'
             r'\\[a-zA-Z]+|'
             r'\\.|'
             r'[a-zA-Z]|'
             r'[0-9]|'
             r'\S'
         )
-    
+
     def tokenize(self, latex_string: str) -> list:
         tokens = self.pattern.findall(latex_string)
         return tokens
@@ -31,48 +74,52 @@ def build_vocabulary_from_dataset(
         cache_dir=cache_dir,
         split=split
     )
-    
+
     print(f"Filtering by LaTeX length <= {max_latex_len}...")
     ds = ds.filter(lambda x: len(x['latex']) <= max_latex_len)
-    
+
     tokenizer = LaTeXTokenizer()
     token_counter = Counter()
-    
+
     print(f"Tokenizing {len(ds)} samples...")
     for item in tqdm(ds):
         latex = item['latex']
         tokens = tokenizer.tokenize(latex)
-        
         token_counter.update(tokens)
-    
+
     print(f"Found {len(token_counter)} unique tokens")
-    
+
     vocab = {
         '<PAD>': 0,
         '<SOS>': 1,
         '<EOS>': 2,
         '<UNK>': 3
     }
-    
+
     idx = 4
-    for token, freq in token_counter.most_common():
-        if freq >= min_freq:
+    for token in tokenizer.common_tokens:
+        if token not in vocab:
             vocab[token] = idx
             idx += 1
-    
+
+    for token, freq in token_counter.most_common():
+        if freq >= min_freq and token not in vocab:
+            vocab[token] = idx
+            idx += 1
+
     print(f"Final vocabulary size: {len(vocab)} tokens")
-    
+
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(vocab, f, ensure_ascii=False, indent=2)
-    
+
     print(f"Vocabulary saved to {output_file}")
-    
+
     stats = {
         'total_tokens': len(vocab),
         'min_frequency': min_freq,
         'most_common_tokens': token_counter.most_common(30)
     }
-    
+
     return vocab, stats
 
 def load_vocabulary(vocab_file: str = 'tokens.json'):
@@ -89,3 +136,7 @@ if __name__ == "__main__":
         output_file='tokens.json',
         max_latex_len=512
     )
+
+    print("\nMost common tokens:")
+    for token, freq in stats['most_common_tokens']:
+        print(f"{token:20s} {freq:6d}")

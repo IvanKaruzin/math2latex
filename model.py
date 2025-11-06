@@ -95,3 +95,47 @@ class FormulaRecognizer(nn.Module):
                     break
 
         return tokens.squeeze(0).tolist()
+    
+    def beam_search(self, image, vocab, device="cpu", beam_width=5, length_penalty=0.6):
+        self.eval()
+        with torch.no_grad():
+            memory = self.encoder(image.unsqueeze(0).to(device))
+            start_token = vocab.stoi[vocab.bos]
+            end_token = vocab.stoi[vocab.eos]
+            
+            beams = [([start_token], 0.0)]
+            completed = []
+            
+            for step in range(self.max_len):
+                candidates = []
+                
+                for tokens, score in beams:
+                    if tokens[-1] == end_token:
+                        completed.append((tokens, score))
+                        continue
+                    
+                    tokens_tensor = torch.tensor([tokens], device=device)
+                    out = self.decoder(tokens_tensor, memory)
+                    logits = out[:, -1, :]
+                    log_probs = torch.log_softmax(logits, dim=-1)
+                    
+                    top_log_probs, top_indices = log_probs.topk(beam_width)
+                    
+                    for log_prob, idx in zip(top_log_probs[0], top_indices[0]):
+                        new_tokens = tokens + [idx.item()]
+                        new_score = score + log_prob.item()
+                        candidates.append((new_tokens, new_score))
+                
+                if not candidates:
+                    break
+                
+                candidates.sort(key=lambda x: x[1] / (len(x[0]) ** length_penalty), reverse=True)
+                beams = candidates[:beam_width]
+                
+                if len(completed) >= beam_width:
+                    break
+            
+            completed.extend(beams)
+            completed.sort(key=lambda x: x[1] / (len(x[0]) ** length_penalty), reverse=True)
+            
+            return completed[0][0] if completed else [start_token, end_token]

@@ -63,7 +63,7 @@ class Vocab:
             if i not in (pad_id, bos_id):
                 toks.append(self.itos[i])
         
-        return " ".join(toks)
+        return "".join(toks)
     
     def save(self, vocab_path):
         with open(vocab_path, 'w', encoding='utf-8') as f:

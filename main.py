@@ -15,7 +15,7 @@ if __name__ == "__main__":
         cache_dir=r'D:\datasets',
         batch_size=128,
         num_workers=0,
-        max_latex_len=64
+        max_latex_len=80
     )
     
     model = FormulaRecognizer(vocab_size=len(vocab), hidden_dim=256)
@@ -26,6 +26,7 @@ if __name__ == "__main__":
         val_loader=val_loader,
         test_loader=test_loader,
         tokenizer=vocab,
-        epochs=20,
-        device=device
+        epochs=2,
+        device=device,
+        resume=True
     )

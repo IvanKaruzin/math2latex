@@ -6,8 +6,7 @@ from datasets import load_dataset
 from torchvision import transforms
 from typing import Optional
 import torchvision.transforms.functional as F
-from build_vocabulary import LaTeXTokenizer
-
+from latex_tokenizer import LaTeXTokenizer
 class ResizeWithPad:
     def __init__(self, target_size=224, fill=255):
         self.target_size = target_size

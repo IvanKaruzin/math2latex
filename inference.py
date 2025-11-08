@@ -7,10 +7,8 @@ from model import FormulaRecognizer
 
 import torch
 import matplotlib.pyplot as plt
-import numpy as np
 import random
 from PIL import Image
-from pathlib import Path
 from vocab import Vocab
 from dataset import LaTeXDataset, ResizeWithPad
 from model import FormulaRecognizer

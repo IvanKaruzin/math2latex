@@ -6,7 +6,7 @@ class ResNetEncoder(nn.Module):
     def __init__(self, hidden_dim=256, freeze_layers=True):
         super().__init__()
         
-        resnet = models.resnet50(pretrained=True)
+        resnet = models.resnet50()
         
         if freeze_layers:
             for param in resnet.layer1.parameters():
@@ -48,7 +48,7 @@ class TransformerDecoder(nn.Module):
         self.transformer_decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
         self.fc_out = nn.Linear(hidden_dim, vocab_size)
         
-        # Создаем маску один раз и кэшируем
+        # Building mask
         self.register_buffer('causal_mask', torch.triu(torch.ones(max_len, max_len), diagonal=1).bool())
 
     def forward(self, tgt, memory):
@@ -58,13 +58,12 @@ class TransformerDecoder(nn.Module):
         pos = pos.unsqueeze(0).expand(B, -1, -1)
         tgt_emb = tok_emb + pos
 
-        # Используем маску
+        # Apply mask
         tgt_mask = self.causal_mask[:T, :T]
 
         out = self.transformer_decoder(tgt_emb, memory, tgt_mask=tgt_mask)  # [B,T,H]
         return self.fc_out(out)
 
-# Итоговая модель 
 class FormulaRecognizer(nn.Module):
     def __init__(self, vocab_size, hidden_dim=256, max_len=512):
         super().__init__()
@@ -75,7 +74,7 @@ class FormulaRecognizer(nn.Module):
 
     def forward(self, images, tokens):
         memory = self.encoder(images)  # [B,S,H]
-        out = self.decoder(tokens[:, :-1], memory)  # предсказываем без последнего токена
+        out = self.decoder(tokens[:, :-1], memory)
         return out  # [B,T-1,V]
 
     def greedy_decode(self, image, vocab, device="cpu"):

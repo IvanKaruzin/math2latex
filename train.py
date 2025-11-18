@@ -66,7 +66,7 @@ def train_model(model, train_loader, val_loader, test_loader, tokenizer, epochs=
             
             optimizer.zero_grad()
             
-            with autocast(device=device):
+            with autocast(device_type=device):
                 outputs = model(imgs, tokens[:, :-1])
                 
                 min_len = min(outputs.size(1), tokens[:, 1:].size(1))

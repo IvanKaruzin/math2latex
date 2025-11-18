@@ -26,7 +26,7 @@ if __name__ == "__main__":
         val_loader=val_loader,
         test_loader=test_loader,
         tokenizer=vocab,
-        epochs=2,
+        epochs=5,
         device=device,
         resume=True
     )

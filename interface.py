@@ -1,10 +1,21 @@
 import sys
 from io import BytesIO
 
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                               QPushButton, QLabel, QTextEdit, QFileDialog, QMessageBox)
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtCore import Qt
+
+import matplotlib
+
+matplotlib.use("Agg")
+from matplotlib import rcParams
+
+rcParams.update({
+    "text.usetex": True,
+    "font.family": "serif",
+    "font.serif": ["Computer Modern Roman", "DejaVu Serif"],
+})
 
 import matplotlib.pyplot as plt
 
@@ -26,7 +37,7 @@ class MathOCRInterface(QMainWindow):
         
         self.image_label = QLabel("Изображение не выбрано")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumHeight(300)
+        self.image_label.setMinimumHeight(200)
         self.image_label.setStyleSheet("border: 1px solid gray")
         layout.addWidget(self.image_label)
         
@@ -36,7 +47,11 @@ class MathOCRInterface(QMainWindow):
         self.latex_output.textChanged.connect(self.on_latex_changed)
         layout.addWidget(self.latex_output)
 
-        self.show_sequence_button = QPushButton("Отобразить предсказанную последовательность")
+        self.copy_button = QPushButton("Сохранить в буфер обмена")
+        self.copy_button.clicked.connect(self.copy_to_clipboard)
+        layout.addWidget(self.copy_button)
+
+        self.show_sequence_button = QPushButton("Отобразить последовательность")
         self.show_sequence_button.setEnabled(False)
         self.show_sequence_button.clicked.connect(self.show_predicted_sequence)
         layout.addWidget(self.show_sequence_button)
@@ -48,6 +63,8 @@ class MathOCRInterface(QMainWindow):
         layout.addWidget(self.preview_label)
         
         central_widget.setLayout(layout)
+
+        self.last_rendered_sequence = ""
         
     def select_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -59,9 +76,11 @@ class MathOCRInterface(QMainWindow):
         
         if file_path:
             pixmap = QPixmap(file_path)
+            label_width = max(self.image_label.width(), 600)
+            label_height = max(self.image_label.height(), 250)
             scaled_pixmap = pixmap.scaled(
-                self.image_label.width(), 
-                self.image_label.height(), 
+                label_width, 
+                label_height, 
                 Qt.KeepAspectRatio, 
                 Qt.SmoothTransformation
             )
@@ -82,9 +101,20 @@ class MathOCRInterface(QMainWindow):
     def on_latex_changed(self):
         self.update_show_button_state()
 
+    def copy_to_clipboard(self):
+        latex_text = self.latex_output.toPlainText().strip()
+        if latex_text:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(latex_text)
+            QMessageBox.information(self, "Успешно", "LaTeX последовательность скопирована в буфер обмена.")
+        else:
+            QMessageBox.warning(self, "Пустая последовательность", "Нет текста для копирования.")
+
     def update_show_button_state(self):
-        has_text = bool(self.latex_output.toPlainText().strip())
-        self.show_sequence_button.setEnabled(has_text)
+        current_text = self.latex_output.toPlainText().strip()
+        has_text = bool(current_text)
+        changed_since_render = current_text != self.last_rendered_sequence
+        self.show_sequence_button.setEnabled(has_text and changed_since_render)
 
     def show_predicted_sequence(self):
         latex_sequence = self.latex_output.toPlainText().strip()
@@ -94,41 +124,52 @@ class MathOCRInterface(QMainWindow):
 
         pixmap = self.render_latex_to_pixmap(latex_sequence)
         if pixmap:
+            target_width = max(self.preview_label.width(), 600)
+            target_height = max(self.preview_label.height(), 250)
             scaled_pixmap = pixmap.scaled(
-                self.preview_label.width(),
-                self.preview_label.height(),
+                target_width,
+                target_height,
                 Qt.KeepAspectRatio,
                 Qt.SmoothTransformation
             )
             self.preview_label.setPixmap(scaled_pixmap)
+            self.last_rendered_sequence = latex_sequence
+            self.update_show_button_state()
         else:
             self.preview_label.setText("Не удалось отобразить последовательность.")
 
     def render_latex_to_pixmap(self, latex_sequence: str) -> QPixmap:
         try:
-            figure = plt.figure(figsize=(4, 2), dpi=150)
+            figure = plt.figure(figsize=(12, 5), dpi=200)
             figure.patch.set_alpha(0.0)
             ax = figure.add_subplot(111)
             ax.axis("off")
             ax.text(
                 0.5,
                 0.5,
-                f"${latex_sequence}$",
-                fontsize=16,
+                rf"$\displaystyle {latex_sequence}$",
+                fontsize=60,
                 ha="center",
                 va="center"
             )
+            
 
             buffer = BytesIO()
-            plt.savefig(buffer, format="png", transparent=True, bbox_inches="tight", pad_inches=0.2)
+            plt.savefig(
+                buffer,
+                format="png",
+                transparent=True,
+                bbox_inches="tight",
+                pad_inches=0.3
+            )
             plt.close(figure)
             buffer.seek(0)
 
             image = QImage()
             if image.loadFromData(buffer.read(), "PNG"):
                 return QPixmap.fromImage(image)
-        except Exception:
-            pass
+        except Exception as exc:
+            self.preview_label.setText(f"Ошибка компиляции LaTeX: {exc}")
         return None
 
 if __name__ == "__main__":

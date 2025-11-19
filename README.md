@@ -18,7 +18,7 @@
 ├── interface.py # Графический интерфейс
 ├── vocab.py # Класс для работы с вокабуляром
 ├── latex_tokenizer.py # Токенизатор LaTeX
-├── build_vocabulary.py# Построение словаря
+├── build_vocabulary.py # Построение словаря
 ├── main.py # Основной скрипт для обучения
 └── checkpoints/ # Папка для сохранения моделей
 ```
@@ -26,17 +26,45 @@
 
 1. Создайте виртуальное окружение:
 ```bash
-python -m venv math_ocr_env
-source math_ocr_env/bin/activate  # Linux/Mac
-math_ocr_env\Scripts\activate    # Windows
+python -m venv math2latex_env
+source math2latex_env/bin/activate  # Linux/Mac
+math2latex_env\Scripts\activate    # Windows
 ```
 
-2. Установите зависимостей:
+2. Установите зависимости:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Подготовьте данные:
+3. Установите LaTeX и Ghostscript для корректной работы предпросмотра формул в GUI:
+
+   **Для Windows:**
+   - Установите [MiKTeX](https://miktex.org/download) (рекомендуется полная установка)
+   - Установите [Ghostscript](https://www.ghostscript.com/download/gsdnld.html)
+   - Убедитесь, что оба пакета добавлены в системную переменную PATH:
+     - MiKTeX: обычно `C:\Program Files\MiKTeX\miktex\bin\x64\` или `C:\Users\<username>\AppData\Local\Programs\MiKTeX\miktex\bin\x64\`
+     - Ghostscript: обычно `C:\Program Files\gs\gs<version>\bin\`
+   - Проверьте установку, выполнив в командной строке:
+     ```bash
+     latex --version
+     dvipng --version
+     gswin64c --version
+     ```
+
+   **Для Linux:**
+   ```bash
+   sudo apt-get install texlive-full ghostscript
+   ```
+
+   **Для macOS:**
+   ```bash
+   brew install --cask mactex
+   brew install ghostscript
+   ```
+
+   После установки перезапустите приложение для применения изменений в PATH.
+
+4. Подготовьте данные:
 ```bash
 python build_vocabulary.py
 ```

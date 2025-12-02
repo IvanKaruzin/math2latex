@@ -37,7 +37,7 @@ class MathOCRInterface(QMainWindow):
         
         self.image_label = QLabel("Изображение не выбрано")
         self.image_label.setAlignment(Qt.AlignCenter)
-        self.image_label.setMinimumHeight(200)
+        self.image_label.setMinimumHeight(300)
         self.image_label.setStyleSheet("border: 1px solid gray")
         layout.addWidget(self.image_label)
         

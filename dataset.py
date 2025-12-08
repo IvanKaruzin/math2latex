@@ -5,7 +5,7 @@ from pathlib import Path
 from datasets import load_dataset
 from torchvision import transforms
 from typing import Optional
-from preprosess_image import ResizeWithPad
+from preprosess_image import ImagePreprocessing
 from latex_tokenizer import LaTeXTokenizer
 from config import IMAGE_SIZE, MAX_LATEX_LEN, HF_CACHE_DIR, IMAGES_DIR
 
@@ -40,11 +40,13 @@ class LaTeXDataset(Dataset):
         print(f"Dataset ready: {len(self.filenames)} samples")
 
     def _default_transform(self):
-        return transforms.Compose([
-            ResizeWithPad(target_size=IMAGE_SIZE, fill=255),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        return ImagePreprocessing(
+            target_size=IMAGE_SIZE, 
+            fill=255,
+            to_tensor=True,
+            normalize=True
+        )
+
 
     def __len__(self):
         return len(self.filenames)

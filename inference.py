@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from PIL import Image
 from vocab import Vocab
-from dataset import ResizeWithPad
+from preprosess_image import ImagePreprocessing
 from model import FormulaRecognizer
 from torchvision import transforms
-from config import DEVICE, BEST_MODEL_PATH
+from config import DEVICE, BEST_MODEL_PATH, IMAGE_SIZE
 
 class FormulaProcessor:
     def __init__(self, checkpoint_path=BEST_MODEL_PATH, vocab_path='tokens.json'):
@@ -26,11 +26,8 @@ class FormulaProcessor:
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model = self.model.to(self.device)
         self.model.eval()
-        self.transform = transforms.Compose([
-            ResizeWithPad(target_size=224, fill=255),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-        ])
+        self.transform = ImagePreprocessing(target_size=IMAGE_SIZE, fill=255)
+
 
     def recognize_formula(self, image_path):
         image = Image.open(image_path).convert('RGB')
@@ -77,11 +74,7 @@ def recognize_formula(image_path, checkpoint_path=BEST_MODEL_PATH, vocab_path='t
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     model.eval()
-    transform = transforms.Compose([
-        ResizeWithPad(target_size=224, fill=255),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
+    transform = ImagePreprocessing(target_size=IMAGE_SIZE, fill=255)
     image = Image.open(image_path).convert('RGB')
     image_tensor = transform(image)
     with torch.no_grad():

@@ -3,16 +3,17 @@ from vocab import Vocab
 from dataset import get_dataloaders
 from model import FormulaRecognizer
 from train import train_model
+from config import HF_CACHE_DIR, HF_DATASET_NAME, VOCAB_PATH
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
     
-    vocab = Vocab(vocab_path='tokens.json')
+    vocab = Vocab(vocab_path=VOCAB_PATH)
     
     train_loader, val_loader, test_loader = get_dataloaders(
-        images_dir=r"D:\datasets\extraction\root\images",
+        images_dir=HF_DATASET_NAME,
         vocab=vocab,
-        cache_dir=r'D:\datasets',
+        cache_dir=HF_CACHE_DIR,
         batch_size=128,
         num_workers=0,
         max_latex_len=80

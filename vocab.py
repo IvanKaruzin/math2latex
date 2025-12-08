@@ -4,17 +4,18 @@ from collections import Counter
 from datasets import load_dataset
 from tqdm import tqdm
 from latex_tokenizer import LaTeXTokenizer
+from config import HF_CACHE_DIR, VOCAB_PATH, HF_DATASET_NAME, MAX_LATEX_LEN
 
 def build_vocabulary_from_dataset(
-    cache_dir: str = r'D:\datasets',
+    cache_dir: str = HF_CACHE_DIR,
     split: str = 'train',
     min_freq: int = 1,
-    output_file: str = 'tokens.json',
-    max_latex_len: int = 512
+    output_file: str = VOCAB_PATH,
+    max_latex_len: int = MAX_LATEX_LEN
 ):
     print(f"Loading dataset...")
     ds = load_dataset(
-        "hoang-quoc-trung/fusion-image-to-latex-datasets",
+        HF_DATASET_NAME,
         cache_dir=cache_dir,
         split=split
     )

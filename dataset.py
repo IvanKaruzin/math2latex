@@ -7,8 +7,9 @@ from torchvision import transforms
 from typing import Optional
 import torchvision.transforms.functional as F
 from latex_tokenizer import LaTeXTokenizer
+from config import IMAGE_SIZE, MAX_LATEX_LEN, HF_CACHE_DIR, IMAGES_DIR
 class ResizeWithPad:
-    def __init__(self, target_size=224, fill=255):
+    def __init__(self, target_size=IMAGE_SIZE, fill=255):
         self.target_size = target_size
         self.fill = fill
     
@@ -40,10 +41,10 @@ class LaTeXDataset(Dataset):
         self,
         images_dir: str,
         vocab,
-        cache_dir: str = r'D:\datasets',
+        cache_dir: str = HF_CACHE_DIR,
         split: str = 'train',
         transform: Optional[transforms.Compose] = None,
-        max_latex_len: int = 512
+        max_latex_len: int = MAX_LATEX_LEN
     ):
         self.images_dir = Path(images_dir)
         self.vocab = vocab
@@ -67,7 +68,7 @@ class LaTeXDataset(Dataset):
 
     def _default_transform(self):
         return transforms.Compose([
-            ResizeWithPad(target_size=224, fill=255),
+            ResizeWithPad(target_size=IMAGE_SIZE, fill=255),
             transforms.ToTensor(),
             transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
@@ -111,9 +112,9 @@ def collate_fn(batch):
     return images, token_batch
 
 def get_dataloaders(
-    images_dir: str = r"D:\datasets\extraction\root\images",
+    images_dir: str = IMAGES_DIR,
     vocab=None,
-    cache_dir: str = r'D:\datasets',
+    cache_dir: str = HF_CACHE_DIR,
     batch_size: int = 32,
     num_workers: int = 0,
     max_latex_len: int = 512

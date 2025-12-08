@@ -13,6 +13,7 @@ from vocab import Vocab
 from dataset import LaTeXDataset, ResizeWithPad
 from model import FormulaRecognizer
 from torchvision import transforms
+from config import DEVICE, IMAGES_DIR, HF_CACHE_DIR, BEST_MODEL_PATH
 
 def denormalize_image(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     tensor = tensor.clone()
@@ -21,21 +22,21 @@ def denormalize_image(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.2
     return torch.clamp(tensor, 0, 1)
 
 def test_inference():
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = DEVICE
     
     vocab = Vocab(vocab_path='tokens.json')
     
     dataset = LaTeXDataset(
-        images_dir=r"D:\datasets\extraction\root\images",
+        images_dir=IMAGES_DIR,
         vocab=vocab,
-        cache_dir=r'D:\datasets',
+        cache_dir=HF_CACHE_DIR,
         split='test',
         max_latex_len=64
     )
     
     model = FormulaRecognizer(vocab_size=len(vocab), hidden_dim=256)
     
-    checkpoint = torch.load('model_best.pth', map_location=device, weights_only=False)
+    checkpoint = torch.load(BEST_MODEL_PATH, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     model.eval()
@@ -79,8 +80,8 @@ def test_inference():
     plt.tight_layout()
     plt.show()
 
-def recognize_formula(image_path, checkpoint_path='checkpoints/checkpoint_best.pth', vocab_path='tokens.json'):
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+def recognize_formula(image_path, checkpoint_path=BEST_MODEL_PATH, vocab_path='tokens.json'):
+        device = DEVICE
     
         vocab = Vocab(vocab_path=vocab_path)
     

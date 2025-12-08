@@ -21,7 +21,7 @@ import matplotlib.pyplot as plt
 
 from inference import recognize_formula
 
-class MathOCRInterface(QMainWindow):
+class MathRecongnizerInterface(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("math2latex")
@@ -174,6 +174,6 @@ class MathOCRInterface(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    window = MathOCRInterface()
+    window = MathRecongnizerInterface()
     window.show()
     sys.exit(app.exec_())

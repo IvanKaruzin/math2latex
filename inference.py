@@ -106,7 +106,3 @@ def recognize_formula(image_path, checkpoint_path='checkpoints/checkpoint_best.p
             predicted_latex = vocab.decode(predicted_ids)
         
         return predicted_latex
-
-
-if __name__ == "__main__":
-    print(recognize_formula('test_images/x.png'))

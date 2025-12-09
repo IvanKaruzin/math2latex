@@ -64,20 +64,3 @@ class FormulaProcessor:
             return buffer
         except Exception as exc:
             raise RuntimeError(f"Ошибка компиляции LaTeX.")
-
-def recognize_formula(image_path, checkpoint_path=BEST_MODEL_PATH, vocab_path='tokens.json'):
-    device = DEVICE
-    vocab = Vocab(vocab_path=vocab_path)
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-    vocab_size = checkpoint.get('vocab_size', len(vocab))
-    model = FormulaRecognizer(vocab_size=vocab_size, hidden_dim=256)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model = model.to(device)
-    model.eval()
-    transform = ImagePreprocessing(target_size=IMAGE_SIZE, fill=255)
-    image = Image.open(image_path).convert('RGB')
-    image_tensor = transform(image)
-    with torch.no_grad():
-        predicted_ids = model.beam_search(image_tensor, vocab, device=device)
-        predicted_latex = vocab.decode(predicted_ids)
-    return predicted_latex
